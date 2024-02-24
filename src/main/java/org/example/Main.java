@@ -14,24 +14,24 @@ import java.util.List;
 
 
 public class Main {
-    private static final String BASE_URL = "https://api.bamboohr.com/api/gateway.php/domain/v1/applicant_tracking/";
     private static final String APPLICATIONS_URL = "applications";
     private static final String JOBS_URL = "jobs";
-    private static final String token = "secret";
-    private static final String AUTHORIZATION_HEADER = "dont commit secrets";
 
     private static final String OPEN_JOB_STATUS = "open";
     private static final String DRAFT_JOB_STATUS = "draft";
     private static final String OPEN_AND_DRAFT_STATUS = "DRAFT_AND_OPEN";
-    
-
 
     private static final String STATUS_NOT_A_FIT = "10";
 
     public static void main(String[] args) throws IOException {
+        Config config = new Config();
+        final String TOKEN = config.getToken();
+        final String AUTHORIZATION_HEADER = config.getAuthHeader();
+        final String DOMAIN = config.getDomain();
+        final String BASE_URL = "https://api.bamboohr.com/api/gateway.php/" + DOMAIN + "/v1/applicant_tracking/";
 
         List<Job> jobs;
-        String jobBody = makeApiRequest(buildJobListingUrl(OPEN_JOB_STATUS));
+        String jobBody = makeApiRequest(AUTHORIZATION_HEADER, buildJobListingUrl(BASE_URL, OPEN_JOB_STATUS));
         final ObjectMapper objectMapper = new ObjectMapper();
         jobs = objectMapper.readValue(jobBody, new TypeReference<>() {});
 
@@ -71,8 +71,8 @@ public class Main {
         //aplicant id 14653
 
         //then get all applicants for that job listing
-        String applicationUrl = buildApplicationsUrl(String.valueOf(selectedJobId));
-        String applicationJson = makeApiRequest(applicationUrl);
+        String applicationUrl = buildApplicationsUrl(BASE_URL, String.valueOf(selectedJobId));
+        String applicationJson = makeApiRequest(AUTHORIZATION_HEADER, applicationUrl);
         ApplicationResponse applicationResponse = objectMapper.readValue(applicationJson, ApplicationResponse.class);
         List<Application> applications = applicationResponse.getApplications();
 
@@ -81,8 +81,8 @@ public class Main {
         //not handling pagination right now
         for (Application application : applications) {
 
-            String applicationDetailsUrl = buildApplicationDetailsUrl(application.getId().toString());
-            String applicationDetailJson = makeApiRequest(applicationDetailsUrl);
+            String applicationDetailsUrl = buildApplicationDetailsUrl(BASE_URL, application.getId().toString());
+            String applicationDetailJson = makeApiRequest(AUTHORIZATION_HEADER, applicationDetailsUrl);
             Application applicationDetails = objectMapper.readValue(applicationDetailJson, Application.class);
 
             Applicant applicant = application.getApplicant();
@@ -98,7 +98,7 @@ public class Main {
                 String input = scanner.next();
                 if ("N".equalsIgnoreCase(input)) {
                     inputChar = input;
-                    Response response = changeStatus(application.getId().toString(), STATUS_NOT_A_FIT);
+                    Response response = changeStatus(AUTHORIZATION_HEADER, DOMAIN, application.getId().toString(), STATUS_NOT_A_FIT);
                     if (response.isSuccessful()) {
                         System.out.println("Successfully set status");
                     } else {
@@ -108,7 +108,7 @@ public class Main {
                 } else if ("O".equalsIgnoreCase(input)) {
                     inputChar = input;
                     try {
-                        openPage(bambooPage(application.getId().toString()));
+                        openPage(bambooPage(DOMAIN, application.getId().toString()));
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
@@ -126,20 +126,20 @@ public class Main {
 
     }
 
-    private static String buildJobListingUrl(String status) {
-        return BASE_URL + JOBS_URL + "?statusGroups" + status + "&sortBy=title";
+    private static String buildJobListingUrl(String baseUrl, String status) {
+        return baseUrl + JOBS_URL + "?statusGroups" + status + "&sortBy=title";
     }
 
-    private static String buildApplicationsUrl(String jobId) {
-        return BASE_URL+APPLICATIONS_URL+"?jobId="+jobId+"&applicationStatus=NEW&sortBy=created_date";
+    private static String buildApplicationsUrl(String baseUrl, String jobId) {
+        return baseUrl+APPLICATIONS_URL+"?jobId="+jobId+"&applicationStatus=NEW&sortBy=created_date";
     }
 
-    private static String buildApplicationDetailsUrl(String applicationId) {
-        return BASE_URL+APPLICATIONS_URL+"/"+applicationId;
+    private static String buildApplicationDetailsUrl(String baseUrl, String applicationId) {
+        return baseUrl+APPLICATIONS_URL+"/"+applicationId;
     }
 
-    private static String bambooPage(String applicantId) {
-        return "https://domain.bamboohr.com/hiring/candidates/"+applicantId+ "?list_type=jobs#ats-comments";
+    private static String bambooPage(String domain, String applicantId) {
+        return "https://"+ domain + ".bamboohr.com/hiring/candidates/"+applicantId+ "?list_type=jobs#ats-comments";
     }
 
     private static void openPage(String url) throws IOException, URISyntaxException {
@@ -154,28 +154,28 @@ public class Main {
 
     }
 
-    private static Response changeStatus(String applicantionId, String status) throws IOException {
+    private static Response changeStatus(String authorizationHeader, String domain, String applicantionId, String status) throws IOException {
         OkHttpClient client = new OkHttpClient();
 
         MediaType mediaType = MediaType.parse("application/json");
         RequestBody body = RequestBody.create("{\"status\":"+status+"}", mediaType);
         Request request = new Request.Builder()
-                .url("https://api.bamboohr.com/api/gateway.php/domain/v1/applicant_tracking/applications/"+applicantionId+"/status")
+                .url("https://api.bamboohr.com/api/gateway.php/"+domain+"/v1/applicant_tracking/applications/"+applicantionId+"/status")
                 .post(body)
                 .addHeader("content-type", "application/json")
-                .addHeader("authorization", "Basic dont commit secrets")
+                .addHeader("authorization", authorizationHeader)
                 .build();
 
         return client.newCall(request).execute();
     }
 
-    private static String makeApiRequest(String urlRequest) throws IOException {
+    private static String makeApiRequest(String authorizationHeader, String urlRequest) throws IOException {
         final OkHttpClient client = new OkHttpClient();
         final Request request = new Request.Builder()
                 .url(urlRequest)
                 .get()
                 .addHeader("accept", "application/json")
-                .addHeader("authorization", AUTHORIZATION_HEADER)
+                .addHeader("authorization", authorizationHeader)
                 .build();
 
 
